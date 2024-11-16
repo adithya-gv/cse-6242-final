@@ -33,10 +33,10 @@ def computeGVI(name: str):
     popularity_z = (popularity - popularity_mean) / popularity_std
     
     # Get the game's price
-    price = get_game_price(name)
+    # price = get_game_price(name)
 
     # Compute the Game Value Index
-    gvi = (playtime_z + critic_z + peer_z + popularity_z) / price
+    gvi = (playtime_z + critic_z + peer_z + popularity_z)
     return gvi
     
 

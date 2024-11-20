@@ -1,6 +1,6 @@
 import rawg_stats
 import pandas as pd
-from nintendo_pricer import get_game_price
+from agg_pricer import game_price
 
 def computeGVI(name: str):
     print(name)
@@ -12,6 +12,7 @@ def computeGVI(name: str):
         peer_rating = stats['peer_rating']
         popularity = stats['popularity']
         year = stats['year']
+        platform = stats['platform']
 
         df = pd.read_csv("mean_game_stats.csv")
 
@@ -35,16 +36,22 @@ def computeGVI(name: str):
         popularity_z = (popularity - popularity_mean) / popularity_std
         
         # Get the game's price
-        # price = get_game_price(name)
+        price = game_price(name, platform)
 
         # Compute the Game Value Index
-        gvi = (playtime_z + critic_z + peer_z + popularity_z)
+        gvi = (playtime_z + critic_z + peer_z + popularity_z) / price
+        print(gvi)
         return gvi
-    except:
+    except Exception as e:
+        print(e)
         return None
     
 
-# Read the file with game names, extract the game name from the dataframe, and compute the GVI, then store it in a new CSV
-games = pd.read_csv("cleaned_game_data.csv")
-games["GVI"] = games["game_name"].apply(computeGVI)
-games.to_csv("game_data_with_gvi.csv", index=False)
+# Read the game_data_with_gvi.csv file, loop through each of the games, and see if the GVI is computed. If not, compute it and add it to the file.
+df = pd.read_csv("game_data_with_gvi.csv")
+for index, row in df.iterrows():
+    if pd.isnull(row["GVI"]):
+        gvi = computeGVI(row["game_name"])
+        if gvi is not None:
+            df.at[index, "GVI"] = gvi
+df.to_csv("game_data_with_gvi.csv", index=False)

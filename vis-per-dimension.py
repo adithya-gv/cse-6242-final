@@ -1,4 +1,5 @@
 import dash
+import dash_bootstrap_components as dbc
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import pandas as pd
@@ -24,56 +25,114 @@ df_scaled[features] = scaler.fit_transform(df[features])
 
 # Initialize Dash app with external stylesheet for better styling
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+# external_stylesheets = [dbc.themes.JOURNAL]
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 app.title = "Game Similarity Visualization"
 
+# Sort the game names alphabetically
+sorted_games = sorted(df['game_name'].dropna().unique())
+
+# Set a default selected game (optional)
+default_game = sorted_games[0] if sorted_games else None
+
+# Define consistent category order for Plotly
+category_order = ['Other Games', 'Selected Game']  # "Selected Game" is last
+
 # Layout
-app.layout = html.Div([
-    html.H1("Game Similarity Visualization", style={"text-align": "center"}),
+app.layout = html.Div(
+    [
+        html.H1("Game Similarity Visualization", style={"text-align": "center"}),
 
-    html.Div([
-        html.Div([
-            html.Label("Select Features to Include:", style={"font-weight": "bold"}),
-            dcc.Checklist(
-                id='feature-checklist',
-                options=[{'label': feature, 'value': feature} for feature in features],
-                value=features,  # Default: all features selected
-                inline=True,
-                inputStyle={"margin-right": "5px", "margin-left": "10px"}
-            )
-        ], className='six columns', style={"margin-bottom": "20px"}),
+        html.Div(
+            [
+                html.Div(
+                    [
+                        html.Label(
+                            "Select Features to Include:",
+                            style={"font-weight": "bold"},
+                        ),
+                        dcc.Checklist(
+                            id='feature-checklist',
+                            options=[
+                                {'label': feature, 'value': feature}
+                                for feature in features
+                            ],
+                            value=features,  # Default: all features selected
+                            inline=True,
+                            inputStyle={
+                                "margin-right": "5px",
+                                "margin-left": "10px",
+                            },
+                        ),
+                    ],
+                    className='six columns',
+                    style={"margin-bottom": "20px"},
+                ),
 
-        html.Div([
-            html.Label("Choose a Game:", style={"font-weight": "bold"}),
-            dcc.Dropdown(
-                id='game-dropdown',
-                options=[{'label': game, 'value': game} for game in df['game_name'].unique()],
-                placeholder="Select a game",
-                style={"width": "100%", "margin-bottom": "20px"}
-            ),
-        ], className='six columns'),
-    ], className='row'),
+                html.Div(
+                    [
+                        html.Label(
+                            "Choose a Game:",
+                            style={"font-weight": "bold"},
+                        ),
+                        dcc.Dropdown(
+                            id='game-dropdown',
+                            options=[
+                                {'label': game, 'value': game}
+                                for game in sorted_games  # Use the sorted list here
+                            ],
+                            value=default_game,  # Set the first game as default
+                            placeholder="Select a game",
+                            style={"width": "100%", "margin-bottom": "20px"},
+                        ),
+                    ],
+                    className='six columns',
+                ),
+            ],
+            className='row',
+        ),
 
-    html.Div(id='visualization-container', style={"height": "72vh"}),
-], style={"padding": "20px"})
+        html.Div(
+            id='visualization-container',
+            style={"height": "72vh"},
+        ),
+    ],
+    style={"padding": "20px"},
+)
 
 # Callback for dynamic visualization
 @app.callback(
     Output('visualization-container', 'children'),
-    [Input('feature-checklist', 'value'),
-     Input('game-dropdown', 'value')]
+    [
+        Input('feature-checklist', 'value'),
+        Input('game-dropdown', 'value'),
+    ],
 )
 def update_visualization(selected_features, selected_game):
     if not selected_features:
-        return html.Div("Please select at least one feature.", style={"text-align": "center", "color": "red"})
+        return html.Div(
+            "Please select at least one feature.",
+            style={"text-align": "center", "color": "red"},
+        )
 
     # Filter dataset based on selected features
     filtered_df = df[selected_features].copy()
     filtered_df['game_name'] = df['game_name']
 
     # Highlight the selected game
-    filtered_df['highlight'] = filtered_df['game_name'].apply(
-        lambda x: 'Selected Game' if x == selected_game else 'Other Games'
+    if selected_game is None:
+        # If no game is selected, categorize all as 'Other Games'
+        filtered_df['highlight'] = 'Other Games'
+    else:
+        filtered_df['highlight'] = filtered_df['game_name'].apply(
+            lambda x: 'Selected Game' if x == selected_game else 'Other Games'
+        )
+
+    # Convert 'highlight' to categorical with ordered categories
+    filtered_df['highlight'] = pd.Categorical(
+        filtered_df['highlight'],
+        categories=category_order,  # Enforce category order
+        ordered=True
     )
 
     # Adjust visualization based on the number of features selected
@@ -86,8 +145,12 @@ def update_visualization(selected_features, selected_game):
             points="all",
             color='highlight',
             title=f"Distribution of {feature}",
-            color_discrete_map={'Selected Game': 'red', 'Other Games': 'lightblue'},
-            hover_data=['game_name']
+            color_discrete_map={
+                'Selected Game': 'red',
+                'Other Games': 'lightblue',
+            },
+            hover_data=['game_name'],
+            category_orders={'highlight': category_order},  # Enforce category order
         )
         fig.update_layout(
             yaxis_title=feature,
@@ -110,9 +173,16 @@ def update_visualization(selected_features, selected_game):
             y=selected_features[1],
             color='highlight',
             title="2D Scatter Plot",
-            color_discrete_map={'Selected Game': 'red', 'Other Games': 'lightblue'},
-            labels={selected_features[0]: selected_features[0], selected_features[1]: selected_features[1]},
-            hover_data=['game_name']
+            color_discrete_map={
+                'Selected Game': 'red',
+                'Other Games': 'lightblue',
+            },
+            labels={
+                selected_features[0]: selected_features[0],
+                selected_features[1]: selected_features[1],
+            },
+            hover_data=['game_name'],
+            category_orders={'highlight': category_order},  # Enforce category order
         )
         fig.update_traces(marker=dict(size=10, opacity=0.7))
         fig.update_layout(
@@ -137,13 +207,17 @@ def update_visualization(selected_features, selected_game):
             z=selected_features[2],
             color='highlight',
             title="3D Scatter Plot",
-            color_discrete_map={'Selected Game': 'red', 'Other Games': 'lightblue'},
+            color_discrete_map={
+                'Selected Game': 'red',
+                'Other Games': 'lightblue',
+            },
             labels={
                 selected_features[0]: selected_features[0],
                 selected_features[1]: selected_features[1],
-                selected_features[2]: selected_features[2]
+                selected_features[2]: selected_features[2],
             },
-            hover_data=['game_name']
+            hover_data=['game_name'],
+            category_orders={'highlight': category_order},  # Enforce category order
         )
         fig.update_traces(marker=dict(size=5, opacity=0.7))
         fig.update_layout(
@@ -167,7 +241,20 @@ def update_visualization(selected_features, selected_game):
         pca_results = pca.fit_transform(df_scaled[selected_features])
         pca_df = pd.DataFrame(pca_results, columns=['PCA 1', 'PCA 2', 'PCA 3'])
         pca_df['game_name'] = df['game_name']
-        pca_df['highlight'] = filtered_df['highlight']
+
+        if selected_game is None:
+            pca_df['highlight'] = 'Other Games'
+        else:
+            pca_df['highlight'] = pca_df['game_name'].apply(
+                lambda x: 'Selected Game' if x == selected_game else 'Other Games'
+            )
+        
+        # Convert 'highlight' to categorical with ordered categories
+        pca_df['highlight'] = pd.Categorical(
+            pca_df['highlight'],
+            categories=category_order,  # Enforce category order
+            ordered=True
+        )
 
         fig = px.scatter_3d(
             pca_df,
@@ -176,8 +263,12 @@ def update_visualization(selected_features, selected_game):
             z='PCA 3',
             color='highlight',
             title="3D Scatter Plot (PCA - First 3 Components)",
-            color_discrete_map={'Selected Game': 'red', 'Other Games': 'lightblue'},
-            hover_data=['game_name']
+            color_discrete_map={
+                'Selected Game': 'red',
+                'Other Games': 'lightblue',
+            },
+            hover_data=['game_name'],
+            category_orders={'highlight': category_order},  # Enforce category order
         )
         fig.update_traces(marker=dict(size=5, opacity=0.7))
         fig.update_layout(

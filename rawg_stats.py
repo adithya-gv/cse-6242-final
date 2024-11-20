@@ -122,8 +122,7 @@ def compute_statistics_for_year(year: int, limit: int=2000, output_mode='py'):
 
 def get_game_stats(name: str):
 
-    clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', name)
-    slug = clean_name.lower().replace(" ", "-")
+    slug = get_slug(name)
     url = f'https://api.rawg.io/api/games/{slug}'
 
     game_set = {}
@@ -136,11 +135,32 @@ def get_game_stats(name: str):
 
     if response.status_code == 200:
         game = response.json()
+        
+        # check if game has key redirect. If it does, and its true, call the function again with the new slug.
+        if 'redirect' in game.keys() and game['redirect']:
+            return get_game_stats(game['slug'])
+
         game_set['name'] = game['name']
         game_set['year'] = int(game['released'].split("-")[0])
         game_set['duration'] = game['playtime']
         game_set['critic_rating'] = game['metacritic']
         game_set['peer_rating'] = game['rating']
         game_set['popularity'] = game['ratings_count']
+        game_set['platform'] = game['platforms'][0]['platform']['name']
     
     return game_set
+
+def get_slug(name: str):
+    url = f'https://api.rawg.io/api/games'
+
+    params = {
+        'key': api_key,
+        'search': name,
+    }
+
+    response = requests.get(url, params=params)
+
+    if response.status_code == 200:
+        game = response.json()
+        return game['results'][0]['slug']
+

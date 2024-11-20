@@ -7,7 +7,7 @@ def get_uuid(game_str):
         if game_str.lower() == cleaned_title:
             return game.nsuid
 
-def get_game_price(game_str):
+def get_ns_game_price(game_str):
     nsuid = str(get_uuid(game_str))
     price = noa.game_info(nsuid).price(country="US")
 

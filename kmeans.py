@@ -1,4 +1,5 @@
 from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,7 +19,11 @@ def clean_data(game_data_with_gvi):
     cleaned_data = game_data.dropna(subset=['duration', 'critic_rating', 'peer_rating', 'popularity', 'GVI'])
     # Get rid of infinite values
     cleaned_data = cleaned_data.replace([np.inf, -np.inf], 0.0)
-    return cleaned_data[['duration', 'critic_rating', 'peer_rating', 'popularity', 'GVI']]
+    cleaned_data = cleaned_data[['duration', 'critic_rating', 'peer_rating', 'popularity', 'GVI']]
+    # Normalize each column to be between 0 and 1
+    scaler = StandardScaler()
+    scaled_data = scaler.fit_transform(cleaned_data)
+    return scaled_data
 
 def clean_data_with_names(game_data_with_gvi):
     game_data = pd.read_csv(game_data_with_gvi)
@@ -59,7 +64,7 @@ def append_cluster_labels(game_data_with_gvi, n_clusters):
     cleaned_data_with_names = clean_data_with_names(game_data_with_gvi)
     cleaned_data_with_names['cluster'] = cluster_labels
     # Write to new file
-    cleaned_data_with_names.to_csv('game_data_with_clusters.csv', index=False)
+    cleaned_data_with_names.to_csv('game_data_with_clusters_2.csv', index=False)
 
 # Master Function
 def run_elbow_method(game_data_with_gvi, max_clusters):
@@ -69,14 +74,14 @@ def run_elbow_method(game_data_with_gvi, max_clusters):
 
 # run_elbow_method('game_data_with_gvi.csv', 10)
 
-# Perform training and inference with four clusters
-# game_data = append_cluster_labels('game_data_with_gvi.csv', 4)
+# Perform training and inference with six clusters
+# game_data = append_cluster_labels('game_data_with_gvi.csv', 6)
 
 # Visualize the clusters from game_data_with_clusters
-# game_data = pd.read_csv('game_data_with_clusters.csv')
-# plt.scatter(game_data['critic_rating'], game_data['GVI'], c=game_data['cluster'], cmap='viridis')
-# plt.xlabel('Duration')
-# plt.ylabel('GVI')
-# plt.title('Clusters of Games')
+game_data = pd.read_csv('game_data_with_clusters_2.csv')
+plt.scatter(game_data['popularity'], game_data['GVI'], c=game_data['cluster'], cmap='viridis')
+plt.xlabel('Duration')
+plt.ylabel('GVI')
+plt.title('Clusters of Games')
 
-# plt.show()
+plt.show()

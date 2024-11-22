@@ -1,12 +1,13 @@
 import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.decomposition import PCA
 import plotly.express as px
+from dash.exceptions import PreventUpdate
 
 # Load data
 df = pd.read_csv('game_data_with_clusters_2.csv')
@@ -60,8 +61,6 @@ alternative_color_discrete_map = {
 }
 
 # Layout
-# Layout with better positioning
-# Adjusted Layout for Left Controls and Right Visualization
 app.layout = dbc.Container(
     [
         # Header
@@ -164,8 +163,8 @@ app.layout = dbc.Container(
 
                 # Right Column: Visualization
                 dbc.Col(
-                    html.Div(
-                        id='visualization-container',
+                    dcc.Graph(
+                        id='main-graph',  # Assign a unique ID here
                         style={"height": "80vh"},  # Full height for the visualization
                     ),
                     md=9,  # Right column width
@@ -176,11 +175,9 @@ app.layout = dbc.Container(
     fluid=True,
 )
 
-
-
 # Callback for dynamic visualization
 @app.callback(
-    Output('visualization-container', 'children'),
+    Output('main-graph', 'figure'),  # Update the figure of the existing graph
     [
         Input('feature-checklist', 'value'),
         Input('game-dropdown', 'value'),
@@ -190,10 +187,14 @@ app.layout = dbc.Container(
 )
 def update_visualization(selected_features, selected_game, toggle_cluster_colors, filter_option):
     if not selected_features:
-        return html.Div(
-            "Please select at least one feature.",
-            style={"text-align": "center", "color": "red"},
-        )
+        return {
+            'data': [],
+            'layout': {
+                'title': "Please select at least one feature.",
+                'xaxis': {'visible': False},
+                'yaxis': {'visible': False},
+            }
+        }
 
     # Determine which color map to use
     if toggle_cluster_colors:
@@ -446,8 +447,7 @@ def update_visualization(selected_features, selected_game, toggle_cluster_colors
             template='plotly_white',
         )
 
-    return dcc.Graph(figure=fig, style={"height": "100%", "width": "100%"})
-
+    return fig  # Return only the figure object
 
 # Callback to update metadata display
 @app.callback(
@@ -485,6 +485,26 @@ def update_metadata(selected_game):
     
     return html.Div(metadata)
 
+# New Callback to handle graph clicks
+@app.callback(
+    Output('game-dropdown', 'value'),
+    [Input('main-graph', 'clickData')],
+    [State('game-dropdown', 'value')]
+)
+def update_game_dropdown_on_click(clickData, current_game):
+    if clickData is None:
+        raise PreventUpdate  # No click has occurred
+    
+    # Extract the game name from the clicked point
+    try:
+        # Assuming 'game_name' is the first item in customdata
+        clicked_game = clickData['points'][0]['customdata'][0]
+        if clicked_game != current_game:
+            return clicked_game
+        else:
+            raise PreventUpdate  # Clicked game is already selected
+    except (IndexError, KeyError, TypeError):
+        raise PreventUpdate  # In case of unexpected clickData structure
 
 # Run the app
 if __name__ == '__main__':

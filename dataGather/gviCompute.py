@@ -1,6 +1,6 @@
-import rawg_stats
+import rawg_stats as rawg_stats
 import pandas as pd
-from dataGather.pricing.agg_pricer import game_price
+from pricing.agg_pricer import game_price
 
 def computeGVI(name: str):
     print(name)
@@ -14,7 +14,7 @@ def computeGVI(name: str):
         year = stats['year']
         platform = stats['platform']
 
-        df = pd.read_csv("yearly_game_summary.csv")
+        df = pd.read_csv("data/yearly_game_summary.csv")
 
         # Extract the statistics for the specified year
         year_stats = df[df["year"] == year]
@@ -39,9 +39,28 @@ def computeGVI(name: str):
         price = game_price(name, platform)
 
         # Compute the Game Value Index
-        gvi = (playtime_z + critic_z + peer_z + popularity_z) / price
-        print(gvi)
-        return gvi
+        gvi = (playtime_z + critic_z + peer_z + popularity_z) 
+        return gvi, price
     except Exception as e:
         print(e)
-        return None
+        return None, 60
+    
+
+# Compute GVI and price for all games, and save to a CSV file
+def compute_all():
+    df = pd.read_csv("data/final_game_data.csv")
+    df = df.dropna(subset=['game_name'])
+    df = df.replace([float('inf'), -float('inf')], 0.0)
+    df['GVI'] = 0.0
+    df['price'] = 0.0
+
+    for i, row in df.iterrows():
+        name = row['game_name']
+        gvi, price = computeGVI(name)
+        print(gvi)
+        df.at[i, 'GVI'] = gvi
+        df.at[i, 'price'] = price
+
+    df.to_csv("real_final_game_data.csv", index=False)
+
+compute_all()

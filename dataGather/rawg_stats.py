@@ -4,7 +4,7 @@ from utils.runningStats import RunningStats
 import pandas as pd
 import os
 
-api_key = "3fef722807c14850b747fae9f75e343a"
+api_key = "c795c47f9bc743ba86eb8af43dd3d923"
 
 def get_games(limit: int=2000):
     url = 'https://api.rawg.io/api/games'
@@ -206,5 +206,3 @@ def append_genre_to_game_data(game_data_with_gvi):
              game_data.at[index, 'genre'] = -1
     
     game_data.to_csv('final_game_data.csv', index=False)
-
-append_genre_to_game_data('data/game_data_with_gvi.csv')

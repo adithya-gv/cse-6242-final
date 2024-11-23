@@ -1,7 +1,7 @@
-from nintendo_pricer import get_ns_game_price
-from steam_pricer import get_steam_game_price
-from last_pricer import get_game_price
-from ps_pricer import search_game_in_store
+from pricing.nintendo_pricer import get_ns_game_price
+from pricing.steam_pricer import get_steam_game_price
+from pricing.last_pricer import get_game_price
+from pricing.ps_pricer import search_game_in_store
 
 def _get_game_price(game_name, platform):
     try:

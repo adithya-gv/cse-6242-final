@@ -75,3 +75,5 @@ def live_clustering():
     cleaned_data_with_names = clean_data_with_names(game_data_with_gvi)
     cleaned_data_with_names['cluster'] = cluster_labels
     return cleaned_data_with_names
+
+generate_cluster_dataset('data/final_game_data.csv')

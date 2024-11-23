@@ -186,7 +186,10 @@ def get_genre(name: str):
         if 'redirect' in game.keys() and game['redirect']:
             return get_genre(game['slug'])
 
-        game_set['genre'] = game['genres'][0]['id']
+        if len(game['genres']) == 0:
+            game_set['genre'] = -1
+        else:
+            game_set['genre'] = game['genres'][0]['id']
     
     return game_set
 
@@ -204,4 +207,4 @@ def append_genre_to_game_data(game_data_with_gvi):
     
     game_data.to_csv('final_game_data.csv', index=False)
 
-append_genre_to_game_data('game_data_with_gvi.csv')
+append_genre_to_game_data('data/game_data_with_gvi.csv')

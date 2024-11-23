@@ -1,6 +1,6 @@
 import rawg_stats
 import pandas as pd
-from agg_pricer import game_price
+from dataGather.pricing.agg_pricer import game_price
 
 def computeGVI(name: str):
     print(name)
@@ -14,7 +14,7 @@ def computeGVI(name: str):
         year = stats['year']
         platform = stats['platform']
 
-        df = pd.read_csv("mean_game_stats.csv")
+        df = pd.read_csv("yearly_game_summary.csv")
 
         # Extract the statistics for the specified year
         year_stats = df[df["year"] == year]
@@ -45,13 +45,3 @@ def computeGVI(name: str):
     except Exception as e:
         print(e)
         return None
-    
-
-# Read the game_data_with_gvi.csv file, loop through each of the games, and see if the GVI is computed. If not, compute it and add it to the file.
-df = pd.read_csv("game_data_with_gvi.csv")
-for index, row in df.iterrows():
-    if pd.isnull(row["GVI"]):
-        gvi = computeGVI(row["game_name"])
-        if gvi is not None:
-            df.at[index, "GVI"] = gvi
-df.to_csv("game_data_with_gvi.csv", index=False)

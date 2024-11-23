@@ -1,11 +1,10 @@
 import requests
 from tqdm import tqdm
-import re
-from runningStats import RunningStats
+from utils.runningStats import RunningStats
 import pandas as pd
 import os
 
-api_key = "2ed0d8539ceb48b5964096a487a016ee"
+api_key = "3fef722807c14850b747fae9f75e343a"
 
 def get_games(limit: int=2000):
     url = 'https://api.rawg.io/api/games'
@@ -34,6 +33,7 @@ def get_games(limit: int=2000):
                 game_pkg['critic_rating'] = game['metacritic']
                 game_pkg['peer_rating'] = game['rating']
                 game_pkg['popularity'] = game['ratings_count']
+
                 game_set[game_name] = game_pkg
             
                 progress_bar.update(1)
@@ -164,3 +164,44 @@ def get_slug(name: str):
         game = response.json()
         return game['results'][0]['slug']
 
+
+def get_genre(name: str):
+
+    slug = get_slug(name)
+
+    url = f'https://api.rawg.io/api/games/{slug}'
+
+    game_set = {}
+
+    params = {
+        'key': api_key,
+    }
+
+    response = requests.get(url, params=params)
+
+    if response.status_code == 200:
+        game = response.json()
+        
+        # check if game has key redirect. If it does, and its true, call the function again with the new slug.
+        if 'redirect' in game.keys() and game['redirect']:
+            return get_genre(game['slug'])
+
+        game_set['genre'] = game['genres'][0]['id']
+    
+    return game_set
+
+# Using game_data_with_gvi.csv, go through each game, and get the genre of the game, and append it to the csv file.
+def append_genre_to_game_data(game_data_with_gvi):
+    game_data = pd.read_csv(game_data_with_gvi)
+    game_data['genre'] = None
+    for index, row in game_data.iterrows():
+        print(row['game_name'])
+        genre = get_genre(row['game_name'])
+        try:
+            game_data.at[index, 'genre'] = genre['genre']
+        except:
+             game_data.at[index, 'genre'] = -1
+    
+    game_data.to_csv('final_game_data.csv', index=False)
+
+append_genre_to_game_data('game_data_with_gvi.csv')

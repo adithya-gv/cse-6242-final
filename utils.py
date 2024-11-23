@@ -1,209 +1,45 @@
-import dash
-import dash_bootstrap_components as dbc
-from dash import dcc, html
-from dash.dependencies import Input, Output, State
+# utils.py
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.decomposition import PCA
 import plotly.express as px
+from dash import html
 from dash.exceptions import PreventUpdate
 
-# Load data
-df = pd.read_csv('data/game_data_with_clusters_2.csv')
+from kmeans import live_clustering, ALL_FEATURES
 
-# Define features for filtering
-features = ['duration', 'critic_rating', 'peer_rating', 'popularity', 'GVI']
+def recluster_data(features=ALL_FEATURES):
+    df = live_clustering(features)
+    imputer = SimpleImputer(strategy='mean')
+    df[features] = imputer.fit_transform(df[features])
 
-# Handle missing values by imputing with the mean
-imputer = SimpleImputer(strategy='mean')
-df[features] = imputer.fit_transform(df[features])
+    scaler = StandardScaler()
+    df_scaled = df.copy()
+    df_scaled[features] = scaler.fit_transform(df[features])
+    return df, df_scaled
 
-# Normalize features for PCA
-scaler = StandardScaler()
-df_scaled = df.copy()
-df_scaled[features] = scaler.fit_transform(df[features])
+def create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled):
+    cluster_counts = df['cluster'].nunique()
+    category_order = [f'Cluster {i}' for i in range(cluster_counts)] + ['Selected Game']
 
-# Initialize Dash app with external Bootstrap stylesheet for better styling
-external_stylesheets = [dbc.themes.BOOTSTRAP]
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-app.title = "Game Similarity Visualization"
+    default_colors = px.colors.qualitative.Plotly
+    color_discrete_map = {cat: default_colors[i % len(default_colors)] for i, cat in enumerate(category_order[:-1])}
+    color_discrete_map['Selected Game'] = '#d62728'
 
-# Sort the game names alphabetically
-sorted_games = sorted(df['game_name'].dropna().unique())
+    alternative_color_discrete_map = {cat: '#1f77b4' for cat in category_order[:-1]}
+    alternative_color_discrete_map['Selected Game'] = '#d62728'
 
-# Set a default selected game (optional)
-default_game = sorted_games[0] if sorted_games else None
-
-# Define consistent category order for Plotly
-category_order = ['Cluster 0', 'Cluster 1', 'Cluster 2', 'Cluster 3', 'Cluster 4', 'Cluster 5', 'Selected Game']  # Updated category order
-
-# Define color mapping for clusters and selected game
-color_discrete_map = {
-    'Cluster 0': '#1f77b4',  # Blue
-    'Cluster 1': '#2ca02c',  # Green
-    'Cluster 2': '#ff7f0e',  # Orange
-    'Cluster 3': '#9467bd',  # Purple
-    'Cluster 4': '#e377c2',  # Pink
-    'Cluster 5': '#7f7f7f',  # Grey
-    'Selected Game': '#d62728',  # Red
-}
-
-# Alternative color mapping when cluster colors are turned off
-alternative_color_discrete_map = {
-    'Cluster 0': '#1f77b4',  # Blue
-    'Cluster 1': '#1f77b4',  # Blue
-    'Cluster 2': '#1f77b4',  # Blue
-    'Cluster 3': '#1f77b4',  # Blue
-    'Cluster 4': '#1f77b4',  # Blue
-    'Cluster 5': '#1f77b4',  # Blue
-    'Selected Game': '#d62728',  # Red
-}
-
-# Layout
-app.layout = dbc.Container(
-    [
-        # Header
-        dbc.Row(
-            dbc.Col(
-                html.H1(
-                    "Game Similarity Visualization",
-                    style={"text-align": "center", "margin-bottom": "20px"},
-                ),
-                width=12,
-            )
-        ),
-
-        # Main Row: Left (Controls + Metadata) and Right (Visualization)
-        dbc.Row(
-            [
-                # Left Column: Controls and Metadata
-                dbc.Col(
-                    [
-                        # Feature Selection
-                        html.Label(
-                            "Select Features to Include:",
-                            style={"font-weight": "bold", "margin-bottom": "5px"},
-                        ),
-                        dcc.Checklist(
-                            id='feature-checklist',
-                            options=[
-                                {'label': feature, 'value': feature}
-                                for feature in features
-                            ],
-                            value=features,  # Default: all features selected
-                            inline=True,
-                            inputStyle={"margin-right": "5px", "margin-left": "10px"},
-                        ),
-                        html.Br(),
-
-                        # Game Selection
-                        html.Label(
-                            "Choose a Game:",
-                            style={"font-weight": "bold", "margin-top": "15px", "margin-bottom": "5px"},
-                        ),
-                        dcc.Dropdown(
-                            id='game-dropdown',
-                            options=[
-                                {'label': game, 'value': game}
-                                for game in sorted_games
-                            ],
-                            value=default_game,  # Set the first game as default
-                            placeholder="Select a game",
-                            style={"width": "100%"},
-                        ),
-                        html.Br(),
-
-                        # Cluster Color Toggle
-                        dbc.Checkbox(
-                            id='toggle-cluster-colors',
-                            label="Turn cluster color off",
-                            value=False,
-                            style={"margin-bottom": "15px", "margin-top": "10px"},
-                        ),
-
-                        # Game Filter Options
-                        html.Label(
-                            "Filter Games:",
-                            style={"font-weight": "bold", "margin-bottom": "5px"},
-                        ),
-                        dcc.RadioItems(
-                            id='filter-options',
-                            options=[
-                                {'label': 'Selected game only', 'value': 'show_selected'},
-                                {'label': 'Selected games and same cluster games', 'value': 'show_cluster'},
-                                {'label': 'All games', 'value': 'show_all'},
-                            ],
-                            value='show_all',  # Default: Show all games
-                            labelStyle={"display": "block", "margin-bottom": "5px"},
-                        ),
-                        html.Br(),
-
-                        # Metadata
-                        html.H4(
-                            "Selected Game Metadata",
-                            style={"text-align": "center", "margin-top": "20px"},
-                        ),
-                        html.Div(
-                            id='metadata-container',
-                            style={
-                                "border": "1px solid #ddd",
-                                "padding": "10px",
-                                "border-radius": "5px",
-                                "height": "30vh",
-                                "overflowY": "auto",
-                                "background-color": "#f9f9f9",
-                                "font-size": "14px",
-                            },
-                        ),
-                    ],
-                    md=3,  # Left column width
-                    style={"padding-right": "15px"},  # Spacing to separate from plot
-                ),
-
-                # Right Column: Visualization
-                dbc.Col(
-                    dcc.Graph(
-                        id='main-graph',  # Assign a unique ID here
-                        style={"height": "80vh"},  # Full height for the visualization
-                    ),
-                    md=9,  # Right column width
-                ),
-            ]
-        ),
-    ],
-    fluid=True,
-)
-
-# Callback for dynamic visualization
-@app.callback(
-    Output('main-graph', 'figure'),  # Update the figure of the existing graph
-    [
-        Input('feature-checklist', 'value'),
-        Input('game-dropdown', 'value'),
-        Input('toggle-cluster-colors', 'value'),  # Existing Input for the color toggle
-        Input('filter-options', 'value'),         # New Input for the filter options
-    ],
-)
-def update_visualization(selected_features, selected_game, toggle_cluster_colors, filter_option):
-    if not selected_features:
-        return {
-            'data': [],
-            'layout': {
-                'title': "Please select at least one feature.",
-                'xaxis': {'visible': False},
-                'yaxis': {'visible': False},
-            }
-        }
-
-    # Determine which color map to use
     if toggle_cluster_colors:
         current_color_map = alternative_color_discrete_map
     else:
         current_color_map = color_discrete_map
 
-    # Start with the full dataset
-    filtered_df = df[selected_features + ['game_name', 'cluster']].copy()
+    # Filter and highlight
+    filtered_df = filter_and_highlight_data(df, selected_features, selected_game, filter_option, category_order) # Helper function
+
+    # ... (The rest of your plotting logic from the original update_visualization function goes here, using filtered_df)
+    # Be sure to use current_color_map and category_order consistently throughout the plotting code
 
     # Apply filtering based on the selected option
     if filter_option == 'show_selected':
@@ -447,16 +283,34 @@ def update_visualization(selected_features, selected_game, toggle_cluster_colors
             template='plotly_white',
         )
 
-    return fig  # Return only the figure object
+    return fig
 
-# Callback to update metadata display
-@app.callback(
-    Output('metadata-container', 'children'),
-    [
-        Input('game-dropdown', 'value'),
-    ],
-)
-def update_metadata(selected_game):
+
+def filter_and_highlight_data(df, selected_features, selected_game, filter_option, category_order):
+    filtered_df = df[selected_features + ['game_name', 'cluster']].copy()
+
+
+    if filter_option == 'show_selected':
+        if selected_game is not None:
+            filtered_df = filtered_df[filtered_df['game_name'] == selected_game]
+    elif filter_option == 'show_cluster':
+        if selected_game is not None:
+            selected_cluster = df.loc[df['game_name'] == selected_game, 'cluster'].iloc[0] if df['game_name'].isin([selected_game]).any() else -1
+            if selected_cluster != -1:  # Ensure selected_cluster is valid
+                filtered_df = filtered_df[filtered_df['cluster'] == selected_cluster]
+
+    # Consistent highlighting logic (simplified)
+    if selected_game is not None and any(filtered_df["game_name"].isin([selected_game])): #Check if selected_game exists in filtered data
+        filtered_df['highlight'] = filtered_df.apply(lambda row: 'Selected Game' if row['game_name'] == selected_game else f'Cluster {row["cluster"]}', axis=1)
+    else:
+        filtered_df['highlight'] = filtered_df['cluster'].apply(lambda x: f'Cluster {x}')
+
+
+    filtered_df['highlight'] = pd.Categorical(filtered_df['highlight'], categories=category_order, ordered=True)
+
+    return filtered_df
+
+def update_metadata(df, selected_game):
     if selected_game is None:
         return html.Div(
             "No game selected.",
@@ -485,12 +339,7 @@ def update_metadata(selected_game):
     
     return html.Div(metadata)
 
-# New Callback to handle graph clicks
-@app.callback(
-    Output('game-dropdown', 'value'),
-    [Input('main-graph', 'clickData')],
-    [State('game-dropdown', 'value')]
-)
+
 def update_game_dropdown_on_click(clickData, current_game):
     if clickData is None:
         raise PreventUpdate  # No click has occurred
@@ -505,7 +354,3 @@ def update_game_dropdown_on_click(clickData, current_game):
             raise PreventUpdate  # Clicked game is already selected
     except (IndexError, KeyError, TypeError):
         raise PreventUpdate  # In case of unexpected clickData structure
-
-# Run the app
-if __name__ == '__main__':
-    app.run_server(debug=True)

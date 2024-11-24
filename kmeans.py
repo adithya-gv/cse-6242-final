@@ -7,8 +7,8 @@ import numpy as np
 import pickle
 from kneed import KneeLocator
 
-CLEANED_DATA_FILEPATH = 'data/cleaned_data.csv'
-CLEANED_DATA_NAMED_FILEPATH = 'data/cleaned_data_with_names.csv'
+SCALED_DATA_FILEPATH = 'data/scaled_data.csv'
+RAW_DATA_FILEPATH = 'data/raw_data.csv'
 
 ALL_FEATURES = ['duration', 'critic_rating', 'peer_rating', 'popularity', 'GVI', 'genre']
 
@@ -28,16 +28,16 @@ def clean_data(game_data_with_gvi, write=False):
     scaler = StandardScaler()
     scaled_data = scaler.fit_transform(cleaned_data)
     if write:
-        pd.DataFrame(scaled_data, columns=ALL_FEATURES).to_csv(CLEANED_DATA_FILEPATH, index=False)
+        pd.DataFrame(scaled_data, columns=ALL_FEATURES).to_csv(SCALED_DATA_FILEPATH, index=False)
     return scaled_data
 
 def clean_data_with_names(game_data_with_gvi, write=False):
     game_data = pd.read_csv(game_data_with_gvi)
     cleaned_data = game_data.dropna(subset=ALL_FEATURES)
     cleaned_data = cleaned_data.replace([np.inf, -np.inf], 0.0)
-    cleaned_data = cleaned_data[['game_name'] + ALL_FEATURES]
+    cleaned_data = cleaned_data[['game_name'] + ALL_FEATURES + ['price']]
     if write:
-        cleaned_data.to_csv(CLEANED_DATA_NAMED_FILEPATH, index=False)
+        cleaned_data.to_csv(RAW_DATA_FILEPATH, index=False)
 
     return cleaned_data
 
@@ -114,8 +114,8 @@ def generate_cluster_dataset(game_data_with_gvi, features, max_clusters=10, meth
 
 
 def live_clustering(features):
-    cleaned_data = pd.read_csv(CLEANED_DATA_FILEPATH)[features]
-    cleaned_data_with_names = pd.read_csv(CLEANED_DATA_NAMED_FILEPATH)[['game_name'] + features]
+    cleaned_data = pd.read_csv(SCALED_DATA_FILEPATH)[features]
+    cleaned_data_with_names = pd.read_csv(RAW_DATA_FILEPATH)[['game_name'] + features]
 
     distortions, silhouette_scores = elbow_method(cleaned_data, max_clusters=10)
     optimal_k = get_optimal_clusters(distortions, silhouette_scores, max_clusters=10, method="knee")

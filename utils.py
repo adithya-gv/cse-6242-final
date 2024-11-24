@@ -15,15 +15,14 @@ def recluster_data(full_df, features=ALL_FEATURES):
     full_df['cluster'] = df['cluster']
     imputer = SimpleImputer(strategy='mean')
     full_df[features] = imputer.fit_transform(full_df[features])
+    return full_df
 
-    scaler = StandardScaler()
-    df_scaled = full_df.copy()
-    df_scaled[features] = scaler.fit_transform(full_df[features])
-    return full_df, df_scaled
-
-def create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled, recommended_df, favorite_df):
+def create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, recommended_df, favorite_df):
     cluster_counts = df['cluster'].nunique()
     category_order = [f'Cluster {i}' for i in range(cluster_counts)] + ['Selected Game', 'Recommended Game', 'Favorite Game']
+
+    genre_df = pd.read_csv('data/genre_map.csv')
+    genre_map = genre_df.set_index('genre_id')['genre_name'].to_dict()
 
     default_colors = px.colors.qualitative.Plotly
     color_discrete_map = {cat: default_colors[i % len(default_colors)] for i, cat in enumerate(category_order[:-3])}
@@ -40,7 +39,7 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
         current_color_map = color_discrete_map
 
     # Filter and highlight
-    filtered_df = filter_and_highlight_data(df, selected_features, selected_game, filter_option, category_order, recommended_df, favorite_df)
+    filtered_df = filter_and_highlight_data(df, selected_features, selected_game, filter_option, category_order, recommended_df, favorite_df, genre_map)
 
     # Adjust visualization based on the number of features selected
     num_features = len(selected_features)
@@ -136,6 +135,9 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
 
     else:
         # More than three features: Apply PCA and show first 3 components in 3D scatter plot
+        scaler = StandardScaler()
+        df_scaled = df.copy()
+        df_scaled[selected_features] = scaler.fit_transform(df_scaled[selected_features])
         pca = PCA(n_components=3)
         pca_results = pca.fit_transform(df_scaled[selected_features])
         pca_df = pd.DataFrame(pca_results, columns=['PCA 1', 'PCA 2', 'PCA 3'])
@@ -146,7 +148,8 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
         y_axis_label = f"PC2 ({', '.join(dominant_features.loc['PC2'])})"
         z_axis_label = f"PC3 ({', '.join(dominant_features.loc['PC3'])})"
 
-        pca_df = filter_and_highlight_data(pca_df, ['PCA 1', 'PCA 2', 'PCA 3'] + selected_features, selected_game, filter_option, category_order, recommended_df, favorite_df)
+        pca_df = filter_and_highlight_data(pca_df, ['PCA 1', 'PCA 2', 'PCA 3'] + selected_features, selected_game, filter_option, category_order, recommended_df, favorite_df, genre_map)
+        print("PCA DF", pca_df)
         fig = px.scatter_3d(
             pca_df,
             x='PCA 1',
@@ -176,8 +179,8 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
 
     return fig
 
-def filter_and_highlight_data(df, selected_features, selected_game, filter_option, category_order, recommmended_games=None, favorite_games=None):
-    filtered_df = df[selected_features + ['game_name', 'cluster']].copy()
+def filter_and_highlight_data(df, selected_features, selected_game, filter_option, category_order, recommmended_games, favorite_games, genre_map):
+    filtered_df = df[selected_features + ['game_name', 'cluster', 'price']].copy()
 
     def filter_selected_game(df, selected_game):
         return df[df['game_name'] == selected_game] if selected_game is not None else df
@@ -200,8 +203,6 @@ def filter_and_highlight_data(df, selected_features, selected_game, filter_optio
             axis=1
         )
     elif filter_option == 'show_favorites_recommended':
-        print("recommended_df", recommmended_games)
-        print("favorite_df", favorite_games)
         filtered_df = filtered_df[filtered_df['game_name'].isin(recommmended_games.values) | filtered_df['game_name'].isin(favorite_games.values)]
         filtered_df['highlight'] = filtered_df.apply(
             lambda row: 'Recommended Game' if row['game_name'] in recommmended_games.values else 'Favorite Game',
@@ -216,6 +217,7 @@ def filter_and_highlight_data(df, selected_features, selected_game, filter_optio
         else:
             filtered_df['highlight'] = filtered_df['cluster'].apply(lambda x: f'Cluster {x}')
 
+    filtered_df['genre'] = filtered_df['genre'].map(genre_map)
     filtered_df['highlight'] = pd.Categorical(filtered_df['highlight'], categories=category_order, ordered=True)
 
     return filtered_df
@@ -249,7 +251,7 @@ def update_metadata(df, selected_game):
     
     return html.Div(metadata)
 
-def recommend_games(favorite_games, df, features):
+def recommend_games(favorite_games, df, features, min_price, max_price):
     recommendations = []
 
     for cluster_id in df['cluster'].unique():
@@ -263,6 +265,9 @@ def recommend_games(favorite_games, df, features):
 
             # Find k closest games to the centroid
             non_favorite_games = cluster_df[~cluster_df['game_name'].isin(favorite_games)]
+            non_favorite_games = non_favorite_games[
+                (non_favorite_games['price'] >= min_price) & (non_favorite_games['price'] <= max_price)
+            ]
             if len(non_favorite_games) >= k:
                 distances = np.linalg.norm(non_favorite_games[features].values - centroid, axis=1)
 
@@ -281,15 +286,13 @@ def recommend_games(favorite_games, df, features):
 
 def update_game_dropdown_on_click(clickData, current_game):
     if clickData is None:
-        raise PreventUpdate  # No click has occurred
+        raise PreventUpdate
     
-    # Extract the game name from the clicked point
     try:
-        # Assuming 'game_name' is the first item in customdata
         clicked_game = clickData['points'][0]['customdata'][0]
         if clicked_game != current_game:
             return clicked_game
         else:
-            raise PreventUpdate  # Clicked game is already selected
+            raise PreventUpdate 
     except (IndexError, KeyError, TypeError):
-        raise PreventUpdate  # In case of unexpected clickData structure
+        raise PreventUpdate 

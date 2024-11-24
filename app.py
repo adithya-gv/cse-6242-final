@@ -5,7 +5,7 @@ from dash import dcc, html
 from dash.dependencies import Input, Output, State
 import pandas as pd
 
-from kmeans import ALL_FEATURES
+from kmeans import ALL_FEATURES, RAW_DATA_FILEPATH
 from utils import (
     recluster_data,
     create_figure,
@@ -14,16 +14,13 @@ from utils import (
     recommend_games
 )
 
-CLEANED_DATA_FILEPATH = 'data/cleaned_data.csv'
-CLEANED_DATA_NAMED_FILEPATH = 'data/cleaned_data_with_names.csv'
-
 # Initialize Dash app
 external_stylesheets = [dbc.themes.BOOTSTRAP]
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 app.title = "Game Recommender and Visualization System"
 
 # Load and preprocess data
-full_df = pd.read_csv(CLEANED_DATA_NAMED_FILEPATH)
+full_df = pd.read_csv(RAW_DATA_FILEPATH)
 
 # Get sorted game names and default game
 sorted_games = sorted(full_df['game_name'].dropna().unique())
@@ -71,7 +68,7 @@ app.layout = dbc.Container(
 
                         # Game Selection
                         html.Label(
-                            "Choose a Game:",
+                            "Find a Game:",
                             style={"font-weight": "bold", "margin-top": "15px", "margin-bottom": "5px"},
                         ),
                         dcc.Dropdown(
@@ -104,6 +101,29 @@ app.layout = dbc.Container(
                                     searchable=True,
                                 )
                                 for i in range(5)
+                            ]
+                        ),
+                        html.Br(),
+
+                        # Price Range Input
+                        html.Label(
+                            "Enter Price Range:",
+                            style={"font-weight": "bold", "margin-top": "15px", "margin-bottom": "5px"},
+                        ),
+                        html.Div(
+                            [
+                                dcc.Input(
+                                    id='min-price',
+                                    type='number',
+                                    placeholder='Min Price',
+                                    style={"width": "48%", "margin-right": "4%"},
+                                ),
+                                dcc.Input(
+                                    id='max-price',
+                                    type='number',
+                                    placeholder='Max Price',
+                                    style={"width": "48%"},
+                                ),
                             ]
                         ),
                         html.Br(),
@@ -166,7 +186,7 @@ app.layout = dbc.Container(
                                 "border": "1px solid #ddd",
                                 "padding": "10px",
                                 "border-radius": "5px",
-                                "height": "15vh",
+                                "height": "12vh",
                                 "overflowY": "auto",
                                 "background-color": "#f9f9f9",
                                 "font-size": "14px",
@@ -197,8 +217,8 @@ app.layout = dbc.Container(
     [Input('feature-checklist', 'value')]
 )
 def update_intermediate_data(selected_features):
-    df, df_scaled = recluster_data(full_df, selected_features)
-    return {'df': df.to_json(orient='split'), 'df_scaled': df_scaled.to_json(orient='split')}
+    df = recluster_data(full_df, selected_features)
+    return {'df': df.to_json(orient='split')}
 
 # Callback to update visualization
 @app.callback(
@@ -209,22 +229,26 @@ def update_intermediate_data(selected_features):
         Input('game-dropdown', 'value'),
         Input('toggle-cluster-colors', 'value'),
         Input('filter-options', 'value'),
-        Input('recommended-games-data', 'data')
+        Input('recommended-games-data', 'data'),
+        Input('min-price', 'value'),
+        Input('max-price', 'value'),
     ],
 )
-def update_visualization(intermediate_data, selected_features, selected_game, toggle_cluster_colors, filter_option, recommended_games_data):
+def update_visualization(intermediate_data, selected_features, selected_game, toggle_cluster_colors, filter_option, recommended_games_data, min_price, max_price):
     df = pd.read_json(io.StringIO(intermediate_data['df']), orient='split')
-    df_scaled = pd.read_json(io.StringIO(intermediate_data['df_scaled']), orient='split')
     recommended_games = pd.read_json(io.StringIO(recommended_games_data['recommended_games']), orient='split', typ='series') if recommended_games_data else None
-    favorite_games = recommended_games_data['favorite_games'] if recommended_games_data else None
-    # print("recommended_games", recommended_games)
-    # print("favorite_games", favorite_games)
-    # recommender_display = filter_option == 'show_favorites_recommended'
-    # if recommender_display:
-    #     df = df[df['game_name'].isin(favorite_games)]
-    #     print("df after filtering", df)
+    favorite_games = pd.read_json(io.StringIO(recommended_games_data['favorite_games']), orient='split', typ='series') if recommended_games_data else None
+    # Identify recommended and favorite games
+    recommended_and_favorite_games = pd.concat([recommended_games, favorite_games]).unique() if recommended_games_data else []
 
-    figure = create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled, recommended_games, favorite_games)
+    # Apply price filtering for visualization purposes, excluding recommended and favorite games
+    if min_price is not None:
+        df = df[(df['price'] >= min_price) | (df['game_name'].isin(recommended_and_favorite_games))]
+    if max_price is not None:
+        df = df[(df['price'] <= max_price) | (df['game_name'].isin(recommended_and_favorite_games))]
+
+    print("df after price filtering", df)
+    figure = create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, recommended_games, favorite_games)
     return figure
 
 # Callback for metadata
@@ -255,19 +279,23 @@ def update_dropdown_on_click(clickData, current_game):
         Input('submit-favorite-games', 'n_clicks'),
         Input('intermediate-data', 'data'),
         Input('feature-checklist', 'value'),
+        Input('min-price', 'value'),
+        Input('max-price', 'value'),
     ],
     [State({'type': 'favorite-game-dropdown', 'index': dash.dependencies.ALL}, 'value')],
     prevent_initial_call=True
 )
-def process_favorite_games_callback(n_clicks, intermediate_data, selected_features, favorite_games):
+def process_favorite_games_callback(n_clicks, intermediate_data, selected_features, min_price, max_price, favorite_games):
     if n_clicks:
         # Pretend there's a function in utils to process favorite games
         df = pd.read_json(io.StringIO(intermediate_data['df']), orient='split')
-        recommended_games = recommend_games(favorite_games, df, selected_features)
+        min_price = 0 if min_price is None else min_price
+        max_price = 1000 if max_price is None else max_price
+        recommended_games = recommend_games(favorite_games, df, selected_features, min_price, max_price)
         recommended_games_list = recommended_games.to_list()
 
         # Store the processed data
-        recommend_games_data = {'recommended_games': recommended_games.to_json(orient='split'), 'favorite_games': pd.Series(favorite_games)}
+        recommend_games_data = {'recommended_games': recommended_games.to_json(orient='split'), 'favorite_games': pd.Series(favorite_games).to_json(orient='split')}
 
         # Create the text output for recommended games
         recommended_games_container = html.Div([

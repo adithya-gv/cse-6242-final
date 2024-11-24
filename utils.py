@@ -1,4 +1,3 @@
-# utils.py
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
@@ -9,15 +8,16 @@ from dash.exceptions import PreventUpdate
 
 from kmeans import live_clustering, ALL_FEATURES
 
-def recluster_data(features=ALL_FEATURES):
+def recluster_data(full_df, features=ALL_FEATURES):
     df = live_clustering(features)
+    full_df['cluster'] = df['cluster']
     imputer = SimpleImputer(strategy='mean')
-    df[features] = imputer.fit_transform(df[features])
+    full_df[features] = imputer.fit_transform(full_df[features])
 
     scaler = StandardScaler()
-    df_scaled = df.copy()
-    df_scaled[features] = scaler.fit_transform(df[features])
-    return df, df_scaled
+    df_scaled = full_df.copy()
+    df_scaled[features] = scaler.fit_transform(full_df[features])
+    return full_df, df_scaled
 
 def create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled):
     cluster_counts = df['cluster'].nunique()
@@ -37,9 +37,6 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
 
     # Filter and highlight
     filtered_df = filter_and_highlight_data(df, selected_features, selected_game, filter_option, category_order) # Helper function
-
-    # ... (The rest of your plotting logic from the original update_visualization function goes here, using filtered_df)
-    # Be sure to use current_color_map and category_order consistently throughout the plotting code
 
     # Apply filtering based on the selected option
     if filter_option == 'show_selected':
@@ -93,10 +90,9 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
                 axis=1
             )
 
-    # Convert 'highlight' to categorical with ordered categories
     filtered_df['highlight'] = pd.Categorical(
         filtered_df['highlight'],
-        categories=category_order,  # Enforce category order
+        categories=category_order,
         ordered=True
     )
 
@@ -111,9 +107,9 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
             points="all",
             color='highlight',
             title=f"Distribution of {feature}",
-            color_discrete_map=current_color_map,  # Use the selected color map
-            hover_data=['game_name'],
-            category_orders={'highlight': category_order},  # Enforce category order
+            color_discrete_map=current_color_map,
+            hover_data=filtered_df.columns,
+            category_orders={'highlight': category_order},
         )
         fig.update_layout(
             yaxis_title=feature,
@@ -136,13 +132,13 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
             y=selected_features[1],
             color='highlight',
             title="2D Scatter Plot",
-            color_discrete_map=current_color_map,  # Use the selected color map
+            color_discrete_map=current_color_map,
             labels={
                 selected_features[0]: selected_features[0],
                 selected_features[1]: selected_features[1],
             },
-            hover_data=['game_name'],
-            category_orders={'highlight': category_order},  # Enforce category order
+            hover_data=filtered_df.columns,
+            category_orders={'highlight': category_order},
         )
         fig.update_traces(marker=dict(size=10, opacity=0.7))
         fig.update_layout(
@@ -167,14 +163,14 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
             z=selected_features[2],
             color='highlight',
             title="3D Scatter Plot",
-            color_discrete_map=current_color_map,  # Use the selected color map
+            color_discrete_map=current_color_map,
             labels={
                 selected_features[0]: selected_features[0],
                 selected_features[1]: selected_features[1],
                 selected_features[2]: selected_features[2],
             },
-            hover_data=['game_name'],
-            category_orders={'highlight': category_order},  # Enforce category order
+            hover_data=filtered_df.columns,
+            category_orders={'highlight': category_order},
         )
         fig.update_traces(marker=dict(size=5, opacity=0.7))
         fig.update_layout(
@@ -197,10 +193,13 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
         pca = PCA(n_components=3)
         pca_results = pca.fit_transform(df_scaled[selected_features])
         pca_df = pd.DataFrame(pca_results, columns=['PCA 1', 'PCA 2', 'PCA 3'])
-        pca_df['game_name'] = df['game_name']
-        pca_df['cluster'] = df['cluster']
+        pca_df = pd.concat([pca_df, df.reset_index(drop=True)], axis=1)
+        components = pd.DataFrame(pca.components_, columns=selected_features, index=['PC1', 'PC2', 'PC3'])
+        dominant_features = components.apply(lambda x: x.nlargest(2).index.tolist(), axis=1)
+        x_axis_label = f"PC1 ({', '.join(dominant_features.loc['PC1'])})"
+        y_axis_label = f"PC2 ({', '.join(dominant_features.loc['PC2'])})"
+        z_axis_label = f"PC3 ({', '.join(dominant_features.loc['PC3'])})"
 
-        # Apply filtering based on the selected option
         if filter_option == 'show_selected':
             if selected_game is not None:
                 pca_df = pca_df[pca_df['game_name'] == selected_game]
@@ -249,10 +248,9 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
                     axis=1
                 )
 
-        # Convert 'highlight' to categorical with ordered categories
         pca_df['highlight'] = pd.Categorical(
             pca_df['highlight'],
-            categories=category_order,  # Enforce category order
+            categories=category_order,
             ordered=True
         )
 
@@ -263,9 +261,9 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
             z='PCA 3',
             color='highlight',
             title="3D Scatter Plot (PCA - First 3 Components)",
-            color_discrete_map=current_color_map,  # Use the selected color map
-            hover_data=['game_name'],
-            category_orders={'highlight': category_order},  # Enforce category order
+            color_discrete_map=current_color_map,
+            hover_data=pca_df.columns,
+            category_orders={'highlight': category_order},
         )
         fig.update_traces(marker=dict(size=5, opacity=0.7))
         fig.update_layout(
@@ -276,9 +274,9 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
             margin=dict(l=0, r=0, t=40, b=0),
             paper_bgcolor="white",
             scene=dict(
-                xaxis_title='PCA 1',
-                yaxis_title='PCA 2',
-                zaxis_title='PCA 3',
+                xaxis_title=x_axis_label,
+                yaxis_title=y_axis_label,
+                zaxis_title=z_axis_label,
             ),
             template='plotly_white',
         )

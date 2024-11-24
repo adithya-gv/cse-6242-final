@@ -1,14 +1,9 @@
-# app.py
+import io
 import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 from dash.dependencies import Input, Output, State
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from sklearn.impute import SimpleImputer
-from sklearn.decomposition import PCA
-import plotly.express as px
-from dash.exceptions import PreventUpdate
 
 from kmeans import ALL_FEATURES
 from utils import (
@@ -16,7 +11,7 @@ from utils import (
     create_figure,
     update_metadata,
     update_game_dropdown_on_click
-)  # Import functions from utils.py
+)
 
 CLEANED_DATA_FILEPATH = 'data/cleaned_data.csv'
 CLEANED_DATA_NAMED_FILEPATH = 'data/cleaned_data_with_names.csv'
@@ -27,10 +22,10 @@ app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 app.title = "Game Similarity Visualization"
 
 # Load and preprocess data
-game_df = pd.read_csv(CLEANED_DATA_NAMED_FILEPATH)
+full_df = pd.read_csv(CLEANED_DATA_NAMED_FILEPATH)
 
 # Get sorted game names and default game
-sorted_games = sorted(game_df['game_name'].dropna().unique())
+sorted_games = sorted(full_df['game_name'].dropna().unique())
 default_game = sorted_games[0] if sorted_games else None
 
 
@@ -141,7 +136,7 @@ app.layout = dbc.Container(
                 dbc.Col(
                     dcc.Graph(
                         id='main-graph',  # Assign a unique ID here
-                        style={"height": "80vh"},  # Full height for the visualization
+                        style={"height": "80vh", "overflow": "visible"},  # Full height for the visualization
                     ),
                     md=9,  # Right column width
                 ),
@@ -151,13 +146,13 @@ app.layout = dbc.Container(
     fluid=True,
 )
 
-# Callback to update intermediate data
+# Callback to update intermediate data (clustered)
 @app.callback(
     Output('intermediate-data', 'data'),
     [Input('feature-checklist', 'value')]
 )
 def update_intermediate_data(selected_features):
-    df, df_scaled = recluster_data(selected_features)
+    df, df_scaled = recluster_data(full_df, selected_features)
     return {'df': df.to_json(orient='split'), 'df_scaled': df_scaled.to_json(orient='split')}
 
 # Callback to update visualization
@@ -172,8 +167,8 @@ def update_intermediate_data(selected_features):
     ],
 )
 def update_visualization(intermediate_data, selected_features, selected_game, toggle_cluster_colors, filter_option):
-    df = pd.read_json(intermediate_data['df'], orient='split')
-    df_scaled = pd.read_json(intermediate_data['df_scaled'], orient='split')
+    df = pd.read_json(io.StringIO(intermediate_data['df']), orient='split')
+    df_scaled = pd.read_json(io.StringIO(intermediate_data['df_scaled']), orient='split')
     figure = create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled)
     return figure
 
@@ -183,11 +178,11 @@ def update_visualization(intermediate_data, selected_features, selected_game, to
     [Input('game-dropdown', 'value'), Input('intermediate-data', 'data')]
 )
 def update_metadata_callback(selected_game, intermediate_data):
-    df = pd.read_json(intermediate_data['df'], orient='split')
+    df = pd.read_json(io.StringIO(intermediate_data['df']), orient='split')
     return update_metadata(df, selected_game)
 
 
-# Callback for graph click (unchanged)
+# Callback for graph click
 @app.callback(
     Output('game-dropdown', 'value'),
     [Input('main-graph', 'clickData')],

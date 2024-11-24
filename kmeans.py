@@ -10,7 +10,7 @@ from kneed import KneeLocator
 CLEANED_DATA_FILEPATH = 'data/cleaned_data.csv'
 CLEANED_DATA_NAMED_FILEPATH = 'data/cleaned_data_with_names.csv'
 
-ALL_FEATURES = ['duration', 'critic_rating', 'peer_rating', 'popularity', 'GVI']
+ALL_FEATURES = ['duration', 'critic_rating', 'peer_rating', 'popularity', 'GVI', 'genre']
 
 def train_kmeans(cleaned_data, n_clusters):
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
@@ -52,16 +52,17 @@ def elbow_method(cleaned_data, max_clusters, method="knee"):
     return distortions, silhouette_scores
 
 def get_optimal_clusters(distortions, silhouette_scores, max_clusters, method="knee"):
-    if method == "knee":
-        knee = KneeLocator(range(2, max_clusters + 1), distortions, curve="convex", direction="decreasing").knee
-        print(f"Optimal k (Elbow Method): {knee}")
-        return knee if knee is not None else 3  
-    elif method == "silhouette":
+    knee_val = 3
+    optimal_k_silhouette = None
+    knee = KneeLocator(range(2, max_clusters + 1), distortions, curve="convex", direction="decreasing").knee
+    print(f"Optimal k (Elbow Method): {knee}")
+    knee_val = knee 
+    if method != "knee":
         optimal_k_silhouette = np.argmax(silhouette_scores) + 2 
         print(f"Optimal k (Silhouette Score): {optimal_k_silhouette}")
-        return optimal_k_silhouette
-    else:
-        raise ValueError("Invalid method. Use 'knee' or 'silhouette'.")
+
+    return knee_val
+
 
 def get_cluster_labels(cleaned_data, kmeans):
     return inference_kmeans(cleaned_data, kmeans)
@@ -91,9 +92,9 @@ def generate_cluster_dataset(game_data_with_gvi, features, max_clusters=10, meth
     cleaned_data = clean_data(game_data_with_gvi, write=True)
     
     # Determine optimal number of clusters
-    distortions, silhouette_scores = elbow_method(cleaned_data, max_clusters)
-    # plot_elbow(distortions, silhouette_scores, max_clusters)
+    distortions, silhouette_scores = elbow_method(cleaned_data, max_clusters, method=method)
     optimal_k = get_optimal_clusters(distortions, silhouette_scores, max_clusters, method)
+    plot_elbow(distortions, silhouette_scores, max_clusters, method=method)
     
     # Train KMeans with the optimal number of clusters
     kmeans = train_kmeans(cleaned_data, optimal_k)
@@ -113,8 +114,8 @@ def generate_cluster_dataset(game_data_with_gvi, features, max_clusters=10, meth
 
 
 def live_clustering(features):
-    cleaned_data = pd.read_csv(CLEANED_DATA_FILEPATH)
-    cleaned_data_with_names = pd.read_csv(CLEANED_DATA_NAMED_FILEPATH)
+    cleaned_data = pd.read_csv(CLEANED_DATA_FILEPATH)[features]
+    cleaned_data_with_names = pd.read_csv(CLEANED_DATA_NAMED_FILEPATH)[['game_name'] + features]
 
     distortions, silhouette_scores = elbow_method(cleaned_data, max_clusters=10)
     optimal_k = get_optimal_clusters(distortions, silhouette_scores, max_clusters=10, method="knee")
@@ -126,7 +127,7 @@ def live_clustering(features):
 # Example usage
 if __name__ == "__main__":
     features = ALL_FEATURES
-    game_data_with_gvi = 'data/game_data_with_gvi.csv'
+    game_data_with_gvi = 'data/final_game_data.csv'
     
     # Run clustering and determine optimal clusters
-    generate_cluster_dataset(game_data_with_gvi, features, max_clusters=10, method="knee")
+    generate_cluster_dataset(game_data_with_gvi, features, max_clusters=10, method="both")

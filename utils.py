@@ -21,16 +21,17 @@ def recluster_data(full_df, features=ALL_FEATURES):
     df_scaled[features] = scaler.fit_transform(full_df[features])
     return full_df, df_scaled
 
-def create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled, recommended_df):
+def create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled, recommended_df, favorite_df):
     cluster_counts = df['cluster'].nunique()
-    category_order = [f'Cluster {i}' for i in range(cluster_counts)] + ['Selected Game', 'Recommended Game']
+    category_order = [f'Cluster {i}' for i in range(cluster_counts)] + ['Selected Game', 'Recommended Game', 'Favorite Game']
 
     default_colors = px.colors.qualitative.Plotly
-    color_discrete_map = {cat: default_colors[i % len(default_colors)] for i, cat in enumerate(category_order[:-2])}
+    color_discrete_map = {cat: default_colors[i % len(default_colors)] for i, cat in enumerate(category_order[:-3])}
     color_discrete_map['Selected Game'] = '#d62728'
     color_discrete_map['Recommended Game'] = '#2ca02c'
+    color_discrete_map['Favorite Game'] = '#9467bd'
 
-    alternative_color_discrete_map = {cat: '#1f77b4' for cat in category_order[:-2]}
+    alternative_color_discrete_map = {cat: '#1f77b4' for cat in category_order[:-3]}
     alternative_color_discrete_map['Selected Game'] = '#d62728'
 
     if toggle_cluster_colors:
@@ -39,72 +40,7 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
         current_color_map = color_discrete_map
 
     # Filter and highlight
-    filtered_df = filter_and_highlight_data(df, selected_features, selected_game, filter_option, category_order) # Helper function
-
-    # Apply filtering based on the selected option
-    if filter_option == 'show_selected':
-        if selected_game is not None:
-            # Filter to show only the selected game
-            filtered_df = filtered_df[filtered_df['game_name'] == selected_game]
-    elif filter_option == 'show_cluster':
-        if selected_game is not None:
-            # Get the cluster of the selected game
-            selected_cluster = df.loc[df['game_name'] == selected_game, 'cluster'].values
-            if len(selected_cluster) > 0:
-                selected_cluster = selected_cluster[0]
-                # Filter to show games in the same cluster
-                filtered_df = filtered_df[filtered_df['cluster'] == selected_cluster]
-
-    # Highlighting logic
-    if filter_option == 'show_all':
-        if selected_game is None:
-            # If no game is selected, categorize all based on their cluster
-            filtered_df['highlight'] = filtered_df['cluster'].apply(lambda x: f'Cluster {x}')
-        else:
-            # Highlight the selected game and categorize others by cluster
-            filtered_df['highlight'] = filtered_df.apply(
-                lambda row: 'Selected Game' if row['game_name'] == selected_game else f'Cluster {row["cluster"]}',
-                axis=1
-            )
-    elif filter_option == 'show_selected':
-        if selected_game is not None:
-            # All entries are the selected game
-            filtered_df['highlight'] = 'Selected Game'
-        else:
-            # No game selected, this case shouldn't typically occur
-            filtered_df['highlight'] = 'Selected Game'
-    elif filter_option == 'show_cluster':
-        if selected_game is not None:
-            # Highlight the selected game, others are in the same cluster
-            filtered_df['highlight'] = filtered_df.apply(
-                lambda row: 'Selected Game' if row['game_name'] == selected_game else f'Cluster {row["cluster"]}',
-                axis=1
-            )
-        else:
-            # No game selected, categorize all based on their cluster
-            filtered_df['highlight'] = filtered_df['cluster'].apply(lambda x: f'Cluster {x}')
-    else:
-        # Default behavior
-        if selected_game is None:
-            filtered_df['highlight'] = filtered_df['cluster'].apply(lambda x: f'Cluster {x}')
-        else:
-            filtered_df['highlight'] = filtered_df.apply(
-                lambda row: 'Selected Game' if row['game_name'] == selected_game else f'Cluster {row["cluster"]}',
-                axis=1
-            )
-
-    # Add recommended games highlighting
-    if recommended_df is not None and not recommended_df.empty:
-        filtered_df['highlight'] = filtered_df.apply(
-            lambda row: 'Recommended Game' if row['game_name'] in recommended_df.values else row['highlight'],
-            axis=1
-        )
-
-    filtered_df['highlight'] = pd.Categorical(
-        filtered_df['highlight'],
-        categories=category_order,
-        ordered=True
-    )
+    filtered_df = filter_and_highlight_data(df, selected_features, selected_game, filter_option, category_order, recommended_df, favorite_df)
 
     # Adjust visualization based on the number of features selected
     num_features = len(selected_features)
@@ -210,66 +146,7 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
         y_axis_label = f"PC2 ({', '.join(dominant_features.loc['PC2'])})"
         z_axis_label = f"PC3 ({', '.join(dominant_features.loc['PC3'])})"
 
-        if filter_option == 'show_selected':
-            if selected_game is not None:
-                pca_df = pca_df[pca_df['game_name'] == selected_game]
-        elif filter_option == 'show_cluster':
-            if selected_game is not None:
-                selected_cluster = df.loc[df['game_name'] == selected_game, 'cluster'].values
-                if len(selected_cluster) > 0:
-                    selected_cluster = selected_cluster[0]
-                    pca_df = pca_df[pca_df['cluster'] == selected_cluster]
-
-        # Highlighting logic
-        if filter_option == 'show_all':
-            if selected_game is None:
-                # If no game is selected, categorize all based on their cluster
-                pca_df['highlight'] = pca_df['cluster'].apply(lambda x: f'Cluster {x}')
-            else:
-                # Highlight the selected game and categorize others by cluster
-                pca_df['highlight'] = pca_df.apply(
-                    lambda row: 'Selected Game' if row['game_name'] == selected_game else f'Cluster {row["cluster"]}',
-                    axis=1
-                )
-        elif filter_option == 'show_selected':
-            if selected_game is not None:
-                # All entries are the selected game
-                pca_df['highlight'] = 'Selected Game'
-            else:
-                # No game selected, default to cluster categorization
-                pca_df['highlight'] = pca_df['cluster'].apply(lambda x: f'Cluster {x}')
-        elif filter_option == 'show_cluster':
-            if selected_game is not None:
-                # Highlight the selected game, others are in the same cluster
-                pca_df['highlight'] = pca_df.apply(
-                    lambda row: 'Selected Game' if row['game_name'] == selected_game else f'Cluster {row["cluster"]}',
-                    axis=1
-                )
-            else:
-                # No game selected, categorize all based on their cluster
-                pca_df['highlight'] = pca_df['cluster'].apply(lambda x: f'Cluster {x}')
-        else:
-            # Default behavior
-            if selected_game is None:
-                pca_df['highlight'] = pca_df['cluster'].apply(lambda x: f'Cluster {x}')
-            else:
-                pca_df['highlight'] = pca_df.apply(
-                    lambda row: 'Selected Game' if row['game_name'] == selected_game else f'Cluster {row["cluster"]}',
-                    axis=1
-                )
-
-        if recommended_df is not None and not recommended_df.empty:
-            pca_df['highlight'] = pca_df.apply(
-                lambda row: 'Recommended Game' if row['game_name'] in recommended_df.values else row['highlight'],
-                axis=1
-            )
-
-        pca_df['highlight'] = pd.Categorical(
-            pca_df['highlight'],
-            categories=category_order,
-            ordered=True
-        )
-
+        pca_df = filter_and_highlight_data(pca_df, ['PCA 1', 'PCA 2', 'PCA 3'] + selected_features, selected_game, filter_option, category_order, recommended_df, favorite_df)
         fig = px.scatter_3d(
             pca_df,
             x='PCA 1',
@@ -299,26 +176,45 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
 
     return fig
 
-
-def filter_and_highlight_data(df, selected_features, selected_game, filter_option, category_order):
+def filter_and_highlight_data(df, selected_features, selected_game, filter_option, category_order, recommmended_games=None, favorite_games=None):
     filtered_df = df[selected_features + ['game_name', 'cluster']].copy()
 
+    def filter_selected_game(df, selected_game):
+        return df[df['game_name'] == selected_game] if selected_game is not None else df
 
-    if filter_option == 'show_selected':
-        if selected_game is not None:
-            filtered_df = filtered_df[filtered_df['game_name'] == selected_game]
-    elif filter_option == 'show_cluster':
+    def filter_cluster(df, selected_game):
         if selected_game is not None:
             selected_cluster = df.loc[df['game_name'] == selected_game, 'cluster'].iloc[0] if df['game_name'].isin([selected_game]).any() else -1
-            if selected_cluster != -1:  # Ensure selected_cluster is valid
-                filtered_df = filtered_df[filtered_df['cluster'] == selected_cluster]
+            if selected_cluster != -1:
+                return df[df['cluster'] == selected_cluster]
+        return df
 
-    # Consistent highlighting logic (simplified)
-    if selected_game is not None and any(filtered_df["game_name"].isin([selected_game])): #Check if selected_game exists in filtered data
-        filtered_df['highlight'] = filtered_df.apply(lambda row: 'Selected Game' if row['game_name'] == selected_game else f'Cluster {row["cluster"]}', axis=1)
-    else:
-        filtered_df['highlight'] = filtered_df['cluster'].apply(lambda x: f'Cluster {x}')
-
+    # Apply filtering based on the selected option
+    if filter_option == 'show_selected':
+        filtered_df = filter_selected_game(filtered_df, selected_game)
+        filtered_df['highlight'] = 'Selected Game'
+    elif filter_option == 'show_cluster':
+        filtered_df = filter_cluster(filtered_df, selected_game)
+        filtered_df['highlight'] = filtered_df.apply(
+            lambda row: 'Selected Game' if row['game_name'] == selected_game else f'Cluster {row["cluster"]}',
+            axis=1
+        )
+    elif filter_option == 'show_favorites_recommended':
+        print("recommended_df", recommmended_games)
+        print("favorite_df", favorite_games)
+        filtered_df = filtered_df[filtered_df['game_name'].isin(recommmended_games.values) | filtered_df['game_name'].isin(favorite_games.values)]
+        filtered_df['highlight'] = filtered_df.apply(
+            lambda row: 'Recommended Game' if row['game_name'] in recommmended_games.values else 'Favorite Game',
+            axis=1
+        )
+    elif filter_option == 'show_all': # default behavior
+        if selected_game is not None and selected_game in filtered_df['game_name'].values:
+            filtered_df['highlight'] = filtered_df.apply(
+                lambda row: 'Selected Game' if row['game_name'] == selected_game else f'Cluster {row["cluster"]}',
+                axis=1
+            )
+        else:
+            filtered_df['highlight'] = filtered_df['cluster'].apply(lambda x: f'Cluster {x}')
 
     filtered_df['highlight'] = pd.Categorical(filtered_df['highlight'], categories=category_order, ordered=True)
 
@@ -382,8 +278,6 @@ def recommend_games(favorite_games, df, features):
             recommendations.extend(closest_games)
 
     return pd.Series(recommendations)
-
-
 
 def update_game_dropdown_on_click(clickData, current_game):
     if clickData is None:

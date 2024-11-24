@@ -215,13 +215,16 @@ def update_intermediate_data(selected_features):
 def update_visualization(intermediate_data, selected_features, selected_game, toggle_cluster_colors, filter_option, recommended_games_data):
     df = pd.read_json(io.StringIO(intermediate_data['df']), orient='split')
     df_scaled = pd.read_json(io.StringIO(intermediate_data['df_scaled']), orient='split')
-    recommended_df = pd.read_json(io.StringIO(recommended_games_data['favorite_games']), orient='split', typ='series') if recommended_games_data else None
-    recommender_display = filter_option == 'show_favorites_recommended'
-    if recommender_display:
-        favorite_games = recommended_df.tolist() if recommended_df is not None else []
-        df = df[df['game_name'].isin(favorite_games)]
+    recommended_games = pd.read_json(io.StringIO(recommended_games_data['recommended_games']), orient='split', typ='series') if recommended_games_data else None
+    favorite_games = recommended_games_data['favorite_games'] if recommended_games_data else None
+    # print("recommended_games", recommended_games)
+    # print("favorite_games", favorite_games)
+    # recommender_display = filter_option == 'show_favorites_recommended'
+    # if recommender_display:
+    #     df = df[df['game_name'].isin(favorite_games)]
+    #     print("df after filtering", df)
 
-    figure = create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled, recommended_df)
+    figure = create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled, recommended_games, favorite_games)
     return figure
 
 # Callback for metadata
@@ -264,15 +267,15 @@ def process_favorite_games_callback(n_clicks, intermediate_data, selected_featur
         recommended_games_list = recommended_games.to_list()
 
         # Store the processed data
-        recommend_games_data = {'favorite_games': recommended_games.to_json(orient='split')}
+        recommend_games_data = {'recommended_games': recommended_games.to_json(orient='split'), 'favorite_games': pd.Series(favorite_games)}
 
         # Create the text output for recommended games
-        recommended_games_text = html.Div([
+        recommended_games_container = html.Div([
             html.H4("Recommended Games:", style={"margin-top": "10px"}),
             html.Ul([html.Li(game) for game in recommended_games_list])
         ])
 
-        return recommend_games_data, recommended_games_text
+        return recommend_games_data, recommended_games_container
 
     else:
         return dash.no_update, dash.no_update

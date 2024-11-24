@@ -217,7 +217,9 @@ def filter_and_highlight_data(df, selected_features, selected_game, filter_optio
         else:
             filtered_df['highlight'] = filtered_df['cluster'].apply(lambda x: f'Cluster {x}')
 
-    filtered_df['genre'] = filtered_df['genre'].map(genre_map)
+    if 'genre' in selected_features:
+        filtered_df['genre'] = filtered_df['genre'].map(genre_map)
+
     filtered_df['highlight'] = pd.Categorical(filtered_df['highlight'], categories=category_order, ordered=True)
 
     return filtered_df

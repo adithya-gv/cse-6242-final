@@ -1,4 +1,6 @@
 import pandas as pd
+import numpy as np
+from sklearn.metrics import pairwise_distances_argmin_min
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.decomposition import PCA
@@ -19,15 +21,16 @@ def recluster_data(full_df, features=ALL_FEATURES):
     df_scaled[features] = scaler.fit_transform(full_df[features])
     return full_df, df_scaled
 
-def create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled):
+def create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled, recommended_df):
     cluster_counts = df['cluster'].nunique()
-    category_order = [f'Cluster {i}' for i in range(cluster_counts)] + ['Selected Game']
+    category_order = [f'Cluster {i}' for i in range(cluster_counts)] + ['Selected Game', 'Recommended Game']
 
     default_colors = px.colors.qualitative.Plotly
-    color_discrete_map = {cat: default_colors[i % len(default_colors)] for i, cat in enumerate(category_order[:-1])}
+    color_discrete_map = {cat: default_colors[i % len(default_colors)] for i, cat in enumerate(category_order[:-2])}
     color_discrete_map['Selected Game'] = '#d62728'
+    color_discrete_map['Recommended Game'] = '#2ca02c'
 
-    alternative_color_discrete_map = {cat: '#1f77b4' for cat in category_order[:-1]}
+    alternative_color_discrete_map = {cat: '#1f77b4' for cat in category_order[:-2]}
     alternative_color_discrete_map['Selected Game'] = '#d62728'
 
     if toggle_cluster_colors:
@@ -89,6 +92,13 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
                 lambda row: 'Selected Game' if row['game_name'] == selected_game else f'Cluster {row["cluster"]}',
                 axis=1
             )
+
+    # Add recommended games highlighting
+    if recommended_df is not None and not recommended_df.empty:
+        filtered_df['highlight'] = filtered_df.apply(
+            lambda row: 'Recommended Game' if row['game_name'] in recommended_df.values else row['highlight'],
+            axis=1
+        )
 
     filtered_df['highlight'] = pd.Categorical(
         filtered_df['highlight'],
@@ -248,6 +258,12 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
                     axis=1
                 )
 
+        if recommended_df is not None and not recommended_df.empty:
+            pca_df['highlight'] = pca_df.apply(
+                lambda row: 'Recommended Game' if row['game_name'] in recommended_df.values else row['highlight'],
+                axis=1
+            )
+
         pca_df['highlight'] = pd.Categorical(
             pca_df['highlight'],
             categories=category_order,
@@ -336,6 +352,37 @@ def update_metadata(df, selected_game):
     ]
     
     return html.Div(metadata)
+
+def recommend_games(favorite_games, df, features):
+    recommendations = []
+
+    for cluster_id in df['cluster'].unique():
+        cluster_df = df[df['cluster'] == cluster_id]
+        favorite_in_cluster = cluster_df[cluster_df['game_name'].isin(favorite_games)]
+
+        k = len(favorite_in_cluster)
+        if k > 0:
+            # Calculate centroid of favorite games in this cluster
+            centroid = favorite_in_cluster[features].mean().values.reshape(1, -1)
+
+            # Find k closest games to the centroid
+            non_favorite_games = cluster_df[~cluster_df['game_name'].isin(favorite_games)]
+            if len(non_favorite_games) >= k:
+                distances = np.linalg.norm(non_favorite_games[features].values - centroid, axis=1)
+
+                # Get the indices of k closest games
+                k_closest_indices = np.argsort(distances)[:k]
+
+                # Retrieve the closest games based on the indices
+                closest_games = non_favorite_games.iloc[k_closest_indices]['game_name'].values
+            else:
+                closest_games = non_favorite_games['game_name'].values
+
+            # Add closest games to recommendations
+            recommendations.extend(closest_games)
+
+    return pd.Series(recommendations)
+
 
 
 def update_game_dropdown_on_click(clickData, current_game):

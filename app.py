@@ -10,7 +10,8 @@ from utils import (
     recluster_data,
     create_figure,
     update_metadata,
-    update_game_dropdown_on_click
+    update_game_dropdown_on_click,
+    recommend_games
 )
 
 CLEANED_DATA_FILEPATH = 'data/cleaned_data.csv'
@@ -19,7 +20,7 @@ CLEANED_DATA_NAMED_FILEPATH = 'data/cleaned_data_with_names.csv'
 # Initialize Dash app
 external_stylesheets = [dbc.themes.BOOTSTRAP]
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-app.title = "Game Similarity Visualization"
+app.title = "Game Recommender and Visualization System"
 
 # Load and preprocess data
 full_df = pd.read_csv(CLEANED_DATA_NAMED_FILEPATH)
@@ -28,17 +29,17 @@ full_df = pd.read_csv(CLEANED_DATA_NAMED_FILEPATH)
 sorted_games = sorted(full_df['game_name'].dropna().unique())
 default_game = sorted_games[0] if sorted_games else None
 
-
 # Layout
 app.layout = dbc.Container(
     [
         dcc.Store(id='intermediate-data', storage_type='memory'),
+        dcc.Store(id='recommended-games-data', storage_type='memory'),
 
         # Header
         dbc.Row(
             dbc.Col(
                 html.H1(
-                    "Game Similarity Visualization",
+                    "Game Recommender and Visualization System",
                     style={"text-align": "center", "margin-bottom": "20px"},
                 ),
                 width=12,
@@ -85,6 +86,49 @@ app.layout = dbc.Container(
                         ),
                         html.Br(),
 
+                        # Top 5 Favorite Games Input
+                        html.Label(
+                            "Enter Your Top 5 Favorite Games:",
+                            style={"font-weight": "bold", "margin-top": "15px", "margin-bottom": "5px"},
+                        ),
+                        html.Div(
+                            [
+                                dcc.Dropdown(
+                                    id={'type': 'favorite-game-dropdown', 'index': i},
+                                    options=[
+                                        {'label': game, 'value': game}
+                                        for game in sorted_games
+                                    ],
+                                    placeholder=f"Select favorite game {i+1}",
+                                    style={"width": "100%", "margin-bottom": "10px"},
+                                    searchable=True,
+                                )
+                                for i in range(5)
+                            ]
+                        ),
+                        html.Br(),
+
+                        # Submit Button for Favorite Games
+                        dbc.Button(
+                            "Submit Favorite Games",
+                            id='submit-favorite-games',
+                            color='primary',
+                            style={"margin-bottom": "15px"}
+                        ),
+
+                        # Recommended Games Display
+                        html.Div(
+                            id='recommended-games-container',
+                            style={
+                                "border": "1px solid #ddd",
+                                "padding": "10px",
+                                "border-radius": "5px",
+                                "margin-top": "15px",
+                                "background-color": "#f9f9f9",
+                                "font-size": "14px",
+                            },
+                        ),
+
                         # Cluster Color Toggle
                         dbc.Checkbox(
                             id='toggle-cluster-colors',
@@ -104,6 +148,7 @@ app.layout = dbc.Container(
                                 {'label': 'Selected game only', 'value': 'show_selected'},
                                 {'label': 'Selected games and same cluster games', 'value': 'show_cluster'},
                                 {'label': 'All games', 'value': 'show_all'},
+                                {'label': 'Favorite and recommended games only', 'value': 'show_favorites_recommended'},
                             ],
                             value='show_all',  # Default: Show all games
                             labelStyle={"display": "block", "margin-bottom": "5px"},
@@ -121,7 +166,7 @@ app.layout = dbc.Container(
                                 "border": "1px solid #ddd",
                                 "padding": "10px",
                                 "border-radius": "5px",
-                                "height": "30vh",
+                                "height": "15vh",
                                 "overflowY": "auto",
                                 "background-color": "#f9f9f9",
                                 "font-size": "14px",
@@ -164,12 +209,19 @@ def update_intermediate_data(selected_features):
         Input('game-dropdown', 'value'),
         Input('toggle-cluster-colors', 'value'),
         Input('filter-options', 'value'),
+        Input('recommended-games-data', 'data')
     ],
 )
-def update_visualization(intermediate_data, selected_features, selected_game, toggle_cluster_colors, filter_option):
+def update_visualization(intermediate_data, selected_features, selected_game, toggle_cluster_colors, filter_option, recommended_games_data):
     df = pd.read_json(io.StringIO(intermediate_data['df']), orient='split')
     df_scaled = pd.read_json(io.StringIO(intermediate_data['df_scaled']), orient='split')
-    figure = create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled)
+    recommended_df = pd.read_json(io.StringIO(recommended_games_data['favorite_games']), orient='split', typ='series') if recommended_games_data else None
+    recommender_display = filter_option == 'show_favorites_recommended'
+    if recommender_display:
+        favorite_games = recommended_df.tolist() if recommended_df is not None else []
+        df = df[df['game_name'].isin(favorite_games)]
+
+    figure = create_figure(df, selected_features, selected_game, toggle_cluster_colors, filter_option, df_scaled, recommended_df)
     return figure
 
 # Callback for metadata
@@ -181,7 +233,6 @@ def update_metadata_callback(selected_game, intermediate_data):
     df = pd.read_json(io.StringIO(intermediate_data['df']), orient='split')
     return update_metadata(df, selected_game)
 
-
 # Callback for graph click
 @app.callback(
     Output('game-dropdown', 'value'),
@@ -190,6 +241,41 @@ def update_metadata_callback(selected_game, intermediate_data):
 )
 def update_dropdown_on_click(clickData, current_game):
     return update_game_dropdown_on_click(clickData, current_game)
+
+# Callback to process favorite games input
+@app.callback(
+    [
+        Output('recommended-games-data', 'data'),
+        Output('recommended-games-container', 'children')
+    ],
+    [
+        Input('submit-favorite-games', 'n_clicks'),
+        Input('intermediate-data', 'data'),
+        Input('feature-checklist', 'value'),
+    ],
+    [State({'type': 'favorite-game-dropdown', 'index': dash.dependencies.ALL}, 'value')],
+    prevent_initial_call=True
+)
+def process_favorite_games_callback(n_clicks, intermediate_data, selected_features, favorite_games):
+    if n_clicks:
+        # Pretend there's a function in utils to process favorite games
+        df = pd.read_json(io.StringIO(intermediate_data['df']), orient='split')
+        recommended_games = recommend_games(favorite_games, df, selected_features)
+        recommended_games_list = recommended_games.to_list()
+
+        # Store the processed data
+        recommend_games_data = {'favorite_games': recommended_games.to_json(orient='split')}
+
+        # Create the text output for recommended games
+        recommended_games_text = html.Div([
+            html.H4("Recommended Games:", style={"margin-top": "10px"}),
+            html.Ul([html.Li(game) for game in recommended_games_list])
+        ])
+
+        return recommend_games_data, recommended_games_text
+
+    else:
+        return dash.no_update, dash.no_update
 
 if __name__ == '__main__':
     app.run_server(debug=True)

@@ -206,3 +206,25 @@ def append_genre_to_game_data(game_data_with_gvi):
              game_data.at[index, 'genre'] = -1
     
     game_data.to_csv('final_game_data.csv', index=False)
+
+def get_genres():
+    url = 'https://api.rawg.io/api/genres'
+
+    params = {
+        'key': api_key,
+    }
+
+    response = requests.get(url, params=params)
+
+    if response.status_code == 200:
+        genres = response.json()
+        genre_map = {}
+        for genre in genres:
+            genre_map[genre['id']] = genre['name']
+
+        df = pd.DataFrame.from_dict(genre_map, orient='index', columns=['genre_name'])
+        df.index.name = 'genre_id'
+        df.to_csv('genre_map.csv')
+    else:
+        return None 
+

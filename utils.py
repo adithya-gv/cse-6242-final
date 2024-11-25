@@ -158,7 +158,7 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
             color='highlight',
             title="3D Scatter Plot (PCA - First 3 Components)",
             color_discrete_map=current_color_map,
-            hover_data=pca_df.columns,
+            hover_data=pca_df.drop(columns=["highlight"]).columns,
             category_orders={'highlight': category_order},
         )
         fig.update_traces(marker=dict(size=5, opacity=0.7))

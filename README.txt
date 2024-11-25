@@ -14,13 +14,12 @@ Description:
     - The dataGather folder contains the code used to gather data, both via webscraping and the API call. It also contains a local copy 
       of the nintendeals library, used to scrape the Nintendo eShop, as the library is no longer maintained and required a fix to get it to work.
     - The kmeans.py file contains the code to run live iterations of the kmeans clustering algorithm.
-    - The visualizaiton folder contains the code used to display the visualizations.
-    - Finally, the vis-colorful-cluster.py folder contains the driving code for the visualization.
+    - app.py contains the frontend logic for the application, and utils.py is the backend logic
 
 Installation Intructions:
 1. Clone the repository into a folder.
-2. Run the command pip install -r requirements.txt to install the relevant packages from the requirements file.
-3. To spin up the application, run python app.py.
+2. Run the command 'pip install -r requirements.txt' to install the relevant packages from the requirements file.
+3. To spin up the application, run 'python app.py'
 
 Demo Instructions:
 1. To run a demo on our application, simply spin it up according to the installation instructions.

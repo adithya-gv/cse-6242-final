@@ -207,6 +207,53 @@ app.layout = dbc.Container(
                 ),
             ]
         ),
+        dbc.Row(
+            dbc.Col(
+                html.Div(
+                    [
+                        html.H5("How to Use the App:", style={"font-weight": "bold", "margin-top": "20px"}),
+                        html.P("1. Use the feature checklist to select features to include in the clustering and visualization."),
+                        html.P("2. Select a game from the dropdown to view its metadata and related clusters."),
+                        html.P("3. Enter your top 5 favorite games and click 'Submit Favorite Games' to get personalized recommendations."),
+                        html.P("4. Set a price range to filter games within a specific budget."),
+                        html.P("5. Use the visualization graph to explore games and clusters by clicking on nodes."),
+                        html.P("6. Toggle cluster colors and apply game filters for a customized view."),
+                        html.P("7. Explore the recommended games listed in the 'Recommended Games' section."),
+                        html.H5("Statistics Explained", style={"font-weight": "bold", "margin-top": "20px"}),
+                        html.P(
+                            "Duration: The average playtime by players of the game, in hours.\n",
+                        ),
+                        html.P(
+                            "Critic Rating: The rating of the game, as per critic aggregate scorer Metacritic\n",
+                        ),
+                        html.P(
+                            "Peer Rating: The rating of the game, as per user ratings.\n",
+                        ),
+                        html.P(
+                            "Popularity: The popularity of the game, based on the number of players.\n",
+                        ),
+                        html.P(
+                            "GVI: The Game Value Index, a metric that combines the above statistics to rank games.\n",
+                        ),
+                        html.P(
+                            "Genre: The genre of the game.\n",
+                        ),
+                    ],
+                    style={
+                        "text-align": "left",
+                        "margin-top": "20px",
+                        "padding": "10px",
+                        "background-color": "#f9f9f9",
+                        "border": "1px solid #ddd",
+                        "border-radius": "5px",
+                        "line-height": "1.2", 
+                        "margin-bottom": "5px",
+                    },
+                ),
+                width=12,
+            )
+        ),
+
     ],
     fluid=True,
 )

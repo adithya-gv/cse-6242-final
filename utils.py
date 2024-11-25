@@ -26,7 +26,7 @@ def create_figure(df, selected_features, selected_game, toggle_cluster_colors, f
 
     default_colors = px.colors.qualitative.Plotly
     color_discrete_map = {cat: default_colors[i % len(default_colors)] for i, cat in enumerate(category_order[:-3])}
-    color_discrete_map['Selected Game'] = '#d62728'
+    color_discrete_map['Selected Game'] = '#ffffff'
     color_discrete_map['Recommended Game'] = '#2ca02c'
     color_discrete_map['Favorite Game'] = '#9467bd'
 
